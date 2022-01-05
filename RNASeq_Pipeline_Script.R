@@ -2,6 +2,9 @@
 
 # Set working directory, packages and data
 
+library(limma)
+library(edgeR)
+
 setwd('D:/Docs/Masteres/Master en Bioinformática y Bioestadística/Tercer Semestre/M0.157 - Análisis de datos ómicos/PEC_02')
 
 Rawcounts <- read.csv('RawCounts.csv')
@@ -12,7 +15,7 @@ SelectColumns <- function(df, Tpatient, size){
   
   set.seed(123)
   
-  df <- df[ , grepl( Tpatient , names( df ) )]
+  df <- df[ , grepl(Tpatient , names( df ) )]
   
   sample <- sample(c(1:ncol(df)), size = size, replace = F)
   
@@ -29,29 +32,50 @@ Healthcounts <- SelectColumns(Rawcounts, 'HEA', 10)
 
 SelectCounts <- cbind(Covcounts, Healthcounts)
 
+rownames(SelectCounts) <- Rawcounts$X
+
 # Now we will remove all rows that only have 0 values in them as we are not interested in these ones
 # To achieve this we will remove all rows that don't contain at least 3 values != 0 in each group
 
-CeroFiles <- function(df){
+CeroFiles <- function(df, MaxNumCero){
   
-     for(row in SelectCounts){
+  v <- c()
+  
+    for(row in 1:nrow(df)){
+      
+      i <- df[row, ]
        
-       count = 0
+       count <- 0
        
-       for(number in row){
+       for(number in i){
          if(number == 0){
            count <- count + 1
            }
        }
-       if(count > 14){
-         df <- df[-v, ]
+       if(count > MaxNumCero){
+         v <- append(v, row)
          }
     }
+  df <- df[-v,]
   return(df)
    }
 
 
+FilteredCounts <- CeroFiles(SelectCounts, 14)
 
-CeroF_Cov <- CeroFiles(SelectCounts)
+# Once filtered for transcripts with low expression, we will normalize de data to make it c
 
-dim(CeroF_Cov)
+CountsPM <- cpm(FilteredCounts,log=TRUE)
+
+colores <- c(rep('tomato', 10), rep('green', 10))
+
+boxplot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, col =colores, main="Boxplot de los logCPM (datos no normalizados)")
+
+abline(h=median(logcounts), col="blue")
+
+plot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, main="Boxplot de los logCPM (datos no normalizados)")
+
+sampleDists <- dist(CountsPM)
+sampleDists
+
+plot(sampleDists)
