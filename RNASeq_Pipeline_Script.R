@@ -63,19 +63,25 @@ CeroFiles <- function(df, MaxNumCero){
 
 FilteredCounts <- CeroFiles(SelectCounts, 14)
 
-# Once filtered for transcripts with low expression, we will normalize de data to make it c
+# Once filtered for transcripts with low expression, we will normalize de data to make all of the reads comparable
+# We will do this using the EdgeR limma package for RNASeq Analysis
 
-CountsPM <- cpm(FilteredCounts,log=TRUE)
+DGECounts <- DGEList(FilteredCounts)
+
+DGECounts_Norm <- calcNormFactors(DGECounts)
+
+DGECounts_Log <- cpm(DGECounts_Norm, log=TRUE)
+
+# With the reads ready to analyze, we will plot them in order to see their distribution
 
 colores <- c(rep('tomato', 10), rep('green', 10))
 
-boxplot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, col =colores, main="Boxplot de los logCPM (datos no normalizados)")
+boxplot(DGECounts_Log, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, col = colores, main="Boxplot de los logCPM (datos normalizados)")
 
-abline(h=median(logcounts), col="blue")
+abline(h=median(DGECounts_Log), col="blue")
 
-plot(logcounts, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, main="Boxplot de los logCPM (datos no normalizados)")
+sampleDists <- dist(t(DGECounts_Log))
 
-sampleDists <- dist(CountsPM)
-sampleDists
+plot(hclust(sampleDists),labels = colnames(DGECounts_Log),main = "Dendogram of sample distances", cex=0.8)
 
-plot(sampleDists)
+
