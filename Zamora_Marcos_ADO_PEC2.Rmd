@@ -1,0 +1,45 @@
+---
+title: 'PEC_2 : Pipeline de Análisis de RNASeq para datos de pacientes con Covid frente a sujetos sanos'
+author: "Marcos Zamora Amengual"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+--------------
+
+### Índice
+
+1. [Abstract](#abstract)
+2. [Objetivos](#objetivos)
+3. [Materiales y Métodos](#matmet)
+    1. [Introducción de los datos y preparación](#preparacion)
+    2. [Identificación de los grupos](#grupos)
+    3. [Exploración y control de calidad de los datos crudos](#exploracion)
+    4. [Normalización](#normalizacion)
+    5. [Control de calidad de los datos normalizados](#control)
+    6. [Filtraje no específico](#filtraje)
+    7. [Identificación de genes diferencialmente expresados](#identificacion)
+4. [Resultados](#resultados)
+    1. [Anotación de los resultados](#anotacion)
+    2. [Comparación entre distintas comparaciones](#comparacion)
+5. [Discusión y Conclusión](#discusion)
+6. [Apéndice](#apendice)
+
+--------------
+
+###  1. Abstract<a name="abstract"></a>
+
+<p align="justify">En este estudio se realiza un pipeline de análisis de datos de RNASeq a partir de las tablas de contages de un estudio obtenido del respositorio *Gene Expression Omnibus* en el que se investigaron los cambios en la expresión genética relacionados con la respuesta inmune frente a la infección por SARS-COV-2. Utilizando paquetes de R para el análisis de datos de RNASeq como limma-Voom, edgeR y GOseq, se analizan los genes expresados diferencialmente entre los dos grupos de muestras y se estudian las rutas metabólicas en las que están involucrados dichos genes, para así comprender mejor la respuesta inmune frente a SARS-COV-2</p>
+
+###  2. Objetivos<a name="objetivos"></a>
+
+<p align="justify">El objetivo principal de este estudio es el de **Analizar la respuesta inmune frente a la infeciión por SARS-COV-2**</p>
+Para ello:
+
+- Partiremos de tablas de contages de un experimento de RNASeq
+- Analizaremos la expresión diferencial de los genes de los 2 grupos experimentales (sanos e infectados por SARS-COV-2)
+- Anlizaremos las rutas a las que pertenecen estos genes expresados diferencialmente mediante un análisis de enriquecimiento de genes GO

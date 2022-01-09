@@ -2,6 +2,7 @@
 
 # Set working directory, packages and data
 
+if (!require(org.Mm.eg.db))BiocManager::install("org.Mm.db")
 library(limma)
 library(edgeR)
 
@@ -164,3 +165,37 @@ pheatmap(mat)
 
 ####### GOSeq y GOStats
 
+topTab<- toptab_CovVsHEA
+head(topTab)
+
+allEntrezs <- rownames(topTab)
+selectedEntrezsUP <- rownames(subset(topTab, (logFC> 2) & (adj.P.Val < 0.05)))
+length(allEntrezs); length(selectedEntrezsUP)
+
+allEntrezs
+
+library(clusterProfiler)
+ego <- enrichGO(gene = selectedEntrezsUP, 
+                universe = allEntrezs,
+                keyType = "ENSEMBL",
+                OrgDb = org.Hs.eg.db, 
+                ont = "BP", 
+                pAdjustMethod = "BH", 
+                qvalueCutoff = 0.05, 
+                readable = TRUE)
+
+head(ego)
+ego_results <- data.frame(ego)
+write.csv(ego_results, "clusterProfiler_ORAresults_UpGO.csv")
+
+## Visualización de los resultados del análisis de enriquecimiento
+
+dotplot(ego, showCategory=9)
+
+goplot(ego, showCategory=5, cex=0.5)
+
+cnetplot(ego) 
+
+library(enrichplot)
+ego_sim <- pairwise_termsim(ego)
+emapplot(ego_sim, cex_label_category=0.5)
