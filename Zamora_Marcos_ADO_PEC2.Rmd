@@ -7,6 +7,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+setwd('D:/Docs/Masteres/Master en Bioinformática y Bioestadística/Tercer Semestre/M0.157 - Análisis de datos ómicos/PEC_02')
 ```
 
 --------------
@@ -16,17 +18,13 @@ knitr::opts_chunk$set(echo = TRUE)
 1. [Abstract](#abstract)
 2. [Objetivos](#objetivos)
 3. [Materiales y Métodos](#matmet)
-    1. [Introducción de los datos y preparación](#preparacion)
-    2. [Identificación de los grupos](#grupos)
-    3. [Exploración y control de calidad de los datos crudos](#exploracion)
-    4. [Normalización](#normalizacion)
-    5. [Control de calidad de los datos normalizados](#control)
-    6. [Filtraje no específico](#filtraje)
-    7. [Identificación de genes diferencialmente expresados](#identificacion)
+    1. [Datos utilizados en el análisis](#datos)
+    2. [Normalización de los datos](#norm)
+    3. [Visualización de los datos normalizados](#vis)
+    4. [Análisis de Expresión Diferencial](#exp_dif)
+    5. [Análisis de significación biológica](#sigbio)
 4. [Resultados](#resultados)
-    1. [Anotación de los resultados](#anotacion)
-    2. [Comparación entre distintas comparaciones](#comparacion)
-5. [Discusión y Conclusión](#discusion)
+5. [Discusión](#discusion)
 6. [Apéndice](#apendice)
 
 --------------
@@ -43,3 +41,432 @@ Para ello:
 - Partiremos de tablas de contages de un experimento de RNASeq
 - Analizaremos la expresión diferencial de los genes de los 2 grupos experimentales (sanos e infectados por SARS-COV-2)
 - Anlizaremos las rutas a las que pertenecen estos genes expresados diferencialmente mediante un análisis de enriquecimiento de genes GO
+
+###  3. Matreriales y Métodos<a name="matmet"></a>
+
+#### 3.1. Datos utilizados en el análisis<a name="datos"></a>
+
+<p align="justify">En este Pipeline se analizan datos de un estudio extraido del repositorio GEO del ncbi, en el que se estudió la influencia de la respuesta inmune frente al SARS-COV-2 en la expresión genética. Este pipeline comienza con los datos del experimento de RNASeq ya alineados con el genema de referencia, ya que partimos de las Tablas de Contages obtenidas tras estos procedimientos. Por ello, el alineamiento de los transcritos no se tiene en cuenta en este análisis</p>
+
+```{r}
+Rawcounts <- read.csv('RawCounts.csv')
+
+# Modificamos el nombre de las filas del data frame para que contenga los nombres de los transcritos que representa en vez del valor numérico de la fila
+rownames(Rawcounts) <- Rawcounts$X
+```
+
+<p align="justify">Esta tabla de contages, que será la información desde la que partamos par realizar el análisis, contiene `r ncol(Rawcounts)-1` muestras, la mitad de ellas, de pacientes cotagiados con SARS-COV-2 y la otra mitad de sujetos sanos. Para cada una de las muestras, se analiza la expresión de `r nrow(Rawcounts)` transcritos. De esta tabla de contages, nosotros realizaremos una selección de 10 muestras de cada uno de los grupos (Sanos e Infectados con SARS-COV-2). Para ello utilizamos una función propia en la que dividiremos los dos grupos de muestras y seleccionaremos 10 muestras de cada uno de ellos de manera aleatoria</p>
+
+```{r, echo=FALSE}
+# Construimos una función que como input toma un set de datos, el grupo de muestras que se quiere extraer y el número de muestras que se quieren extraer de dicho grupo
+# y devuelve el set de datos correspondiente
+
+SelectColumns <- function(df, Tpatient, size){
+  
+  set.seed(123)
+  
+  df <- df[ , grepl(Tpatient , names( df ) )]
+  
+  sample <- sample(c(1:ncol(df)), size = size, replace = F)
+  
+  sampledf <- df[sample]
+  
+  return(sampledf)
+}
+```
+
+
+```{r}
+# Aplicamos nuestra fórmula a nuestro set de datos para cada uno de los grupos (HEA y COV)
+CovReads <- SelectColumns(Rawcounts, 'COV', 10)
+
+HealthReads <- SelectColumns(Rawcounts, 'HEA', 10)
+
+SelectCounts <- cbind(CovReads, HealthReads)
+```
+
+<p align="justify">Por último, y antes de comenzar con el análisis, eliminaremos los tránscritos que no están expresados en ninguno de los dos grupos experimentales, ni en los infectados con SARS-COV-2 ni en los sujetos sanos. Para ellos utilizaremos otra función propia que elimina las filas de datos que no contengan al menos más de 3 entradas distintas de 0 para cada uno de los grupos experimentales. Por lo tanto, lo que hará nuestra función será contar el número de 0s por fila y eliminar aquellas filas que contengan 15 ceros o más<p>
+
+```{r,, echo = FALSE}
+# El input de nuestra función será un set de datos y el número máximo de 0s que toleraremos por columna (en nuestro caso 14)
+# El output será el set de datos sin las columnas con más 0s de los permitidos
+
+CeroFiles <- function(df, MaxNumCero){
+  
+  v <- c()
+  
+    for(row in 1:nrow(df)){
+      
+      i <- df[row, ]
+       
+       count <- 0
+       
+       for(number in i){
+         if(number == 0){
+           count <- count + 1
+           }
+       }
+       if(count > MaxNumCero){
+         v <- append(v, row)
+         }
+    }
+  df <- df[-v,]
+  return(df)
+}
+```
+
+
+```{r}
+FilteredCounts <- CeroFiles(SelectCounts, 14)
+```
+
+<p align="justify">A este set de datos final en el que tenemos seleccionadas las muestras de cada grupo que analizaremos y los transcritos relevantes para el análisis, le añadiremos un data set anexo que llamaremos SampleInfo y que contendrá 2 columnas. La primera serán los nombres de cada una de las muestras de nuestro data set final, y la segunda será un factor en el que se indicará el grupo al que perteneca cada muestra:<p>
+
+- HEA (muestras de individuos sanos)
+- COV (muestras de individuos infectados con SARS-COV-2)
+
+<p align="justify">Obtenemos por tanto un set de datos con `r length(FilteredCounts)` muestras, divididas equitativamente entre los dos grupos experimental, y `r nrow(FilteredCounts)` transcritos expresados en el experimento<p>
+
+```{r, echo=FALSE}
+SampleInfo <- data.frame(colnames(FilteredCounts), c(rep('COV', 10), rep('HEA', 10)))
+
+colnames(SampleInfo) <- c('ShortName', 'Status')
+
+SampleInfo$Status <- factor (SampleInfo$Status)
+```
+
+```{r}
+knitr::kable(head(FilteredCounts))
+```
+
+#### 3.2. Normalización de los Datos<a name="norm"></a>
+
+<p align="justify">Para conseguir que los datos de los distintos tránscritos y muestras sean comparables entre sí, independientemente de la longitud individual de cada tránscrito y el tamaño de las librerias, utilizaremos una normalización TPM de los datos. Esta normalización TPM, normaliza los datos, en primer lugar con respecto a la longitud de los genes y en segundo lugar atendiendo a la profundidad de la secuenciación.<p>
+
+<p align="justify">Para llevar a cabo esta normalización, vamos a utilizar el paquete edgeR y por lo tanto convertiremos nuestro set de datos a un formato DGEList para luego poder normalizarlos utilizando la función para la normalización TPM de este paquete<p>
+
+```{r}
+library(limma)
+library(edgeR)
+
+DGECounts <- DGEList(FilteredCounts)
+
+DGECounts_Norm <- calcNormFactors(DGECounts)
+```
+
+#### 3.3. Visualización de los datos normalizados<a name="vis"></a>
+
+<p align="justify">Una vez tenemos los datos ya seleccionados, filtrados y normalizados, podemos visualizarlos para estudiar a gran escala su distribución y ver si son comparables y si esperamos ver alguna diferencia entre los grupos experimentales o si existen otras diferencias en los datos que no se correpondan con estos grupos seleccionados y que se puedan deber a otras causas.<p>
+
+<p align="justify">En primer lugar, vamos a realizar un boxplot de los logaritmos de los datos normalizados para ver si todas las muestras presentan una media similar y por tanto para comprobar si las muestras son comparables entre sí. Podemos comprobar en el boxplot que las medidas de todos los grupos se centran muy claramente sobre la media global (línea roja)<p>
+
+```{r, echo = FALSE}
+# Boxplot de la media normalizada de los distintos grupos
+DGECounts_Log <- cpm(DGECounts_Norm, log=TRUE)
+
+col.status <- c("blue","green")[SampleInfo$Status]
+
+boxplot(DGECounts_Log, ylab= "log-CPM", cex.axis=0.8, col = col.status, main="Boxplot de los log(CPM) para cada muestra")
+
+abline(h=median(DGECounts_Log), col="tomato", lwd = 2)
+```
+
+<p align="justify">Como hemos visto en el gráfico de barras, las muestras son comparables entre sí, y por lo tanto los resultados que saquemos del estudio serán fiables. Para analizar los posibles resultados que obtendremos en el estudio de antemano, lo que podemos hacer es graficar las distancias existentes entre las distintas muestras que utilizaremos para llevar a cabo el análisis y ver como se distribuyen entre sí y si existe algún patrón que podamos observar a priori.<p>
+
+<p align="justify">Para llevar a cabo este estudio, debemos calcular en primer lugar las distancias que existen entre las distintas muestras, y una vez obtenidas estas distancia, podemos mostrarlas utilizando un gráfico de puntos<p>
+
+```{r}
+# Cálculo de las distancias entre muestras
+sampleDists <- dist(t(DGECounts_Log))
+
+# Distancias entre muestras graficadas
+plotMDS(DGECounts_Log,col=col.status, main="Distancias entre las Muestras", cex=0.7)
+```
+
+<p align="justify">Se puede comprobar claramente como la distribución de las muestras se divide en dos grupos, uno a la izquierda del gráfico, compuesto por las muestras correspondientes al grupo COV(pacientes con Covid) y otro grupo a la derecha, con las muestras correspondientes al grupo HEA(sujetos sanos). Esto nos confirma que existen diferencias significativas entre las muestras de los grupos y que por lo tanto es probable que obtengamos resultados que confirme estas diferencias. Podemos graficar este resultado de nuevo pero esta vez utilizando un dendograma que nos muestre como se agrupan nuestras muestras<p>
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Dendograma de las distancias entre muestras
+
+library(dendextend)
+
+hc <- hclust(sampleDists)
+
+dend <-as.dendrogram(hc)
+
+dend <- dend %>%
+  color_branches(k = 2) %>%
+  set("branches_lwd", c(2,2)) %>%
+  set("branches_lty", c(1,1))
+
+dend <- color_labels(dend, k = 2)
+
+plot(dend)
+```
+
+#### 3.4. Análisis de Expresión Diferencial<a name="exp_dif"></a>
+
+```{r}
+design  <-  model.matrix(~0+SampleInfo$Status)
+colnames(design) <- c("COV", "HEA")
+rownames(design) <- SampleInfo$ShortName
+design
+
+cont.matrix <- makeContrasts(CovVsHealthy= COV - HEA, levels=design)
+
+cont.matrix
+
+VoomCounts <- voom(DGECounts_Norm, design)
+
+VoomCounts
+
+fit <- lmFit(VoomCounts)
+fit.cont <- contrasts.fit(fit, cont.matrix)
+fit.cont <- eBayes(fit.cont)
+
+toptab_CovVsHEA <- topTable(fit.cont,sort.by="p", number=nrow(fit.cont))
+head(toptab_CovVsHEA)
+
+volcanoplot(fit.cont,highlight=10, main="CovVsHEA")
+
+write.csv(toptab_CovVsHEA, "toptab_CovVsHEA.csv")
+
+summa.fit <- decideTests(fit.cont, p.value = 0.05, lfc = 2)
+summary(summa.fit)
+
+library(pheatmap)
+topGenes <- rownames(subset(toptab_CovVsHEA, (abs(logFC)> 2) & (adj.P.Val < 0.05)))
+length(topGenes)
+mat  <- DGECounts_Log[topGenes, SampleInfo$ShortName]
+mat  <- mat - rowMeans(mat)
+library(pheatmap)
+pheatmap(mat)
+```
+
+#### 3.5. Análisis de significación biológica<a name="sigbio"></a>
+
+```{r}
+topTab<- toptab_CovVsHEA
+head(topTab)
+
+allEntrezs <- rownames(topTab)
+selectedEntrezsUP <- rownames(subset(topTab, (logFC> 2) & (adj.P.Val < 0.05)))
+length(allEntrezs); length(selectedEntrezsUP)
+
+allEntrezs
+
+library(clusterProfiler)
+ego <- enrichGO(gene = selectedEntrezsUP, 
+                universe = allEntrezs,
+                keyType = "ENSEMBL",
+                OrgDb = org.Hs.eg.db, 
+                ont = "BP", 
+                pAdjustMethod = "BH", 
+                qvalueCutoff = 0.05, 
+                readable = TRUE)
+
+head(ego)
+ego_results <- data.frame(ego)
+write.csv(ego_results, "clusterProfiler_ORAresults_UpGO.csv")
+```
+
+#### 6. Apéndice<a name="apendice"></a>
+
+```{r, eval = FALSE}
+# Pipeline de Análisis de Datos de RNASeq
+
+# Paquetes, datos y directorio utilizados
+
+library(limma)
+library(edgeR)
+library(dendextend)
+library(pheatmap)
+library(clusterProfiler)
+library(enrichplot)
+
+setwd('D:/Docs/Masteres/Master en Bioinformática y Bioestadística/Tercer Semestre/M0.157 - Análisis de datos ómicos/PEC_02')
+
+Rawcounts <- read.csv('RawCounts.csv')
+
+# Función para separar data sets en función de los grupos y el número de muestras deseadas
+
+SelectColumns <- function(df, Tpatient, size){
+  
+  set.seed(123)
+  
+  df <- df[ , grepl(Tpatient , names( df ) )]
+  
+  sample <- sample(c(1:ncol(df)), size = size, replace = F)
+  
+  sampledf <- df[sample]
+  
+  return(sampledf)
+}
+
+# Separación de grupos
+
+CovReads <- SelectColumns(Rawcounts, 'COV', 10)
+
+HealthReads <- SelectColumns(Rawcounts, 'HEA', 10)
+
+SelectCounts <- cbind(CovReads, HealthReads)
+
+# Modificamos el nombre de las filas del set de datos
+
+rownames(SelectCounts) <- Rawcounts$X
+
+head(SelectCounts, 10)
+
+# Función que elimina las filas que contienen mas de un número fijado de 0s
+
+CeroFiles <- function(df, MaxNumCero){
+  
+  v <- c()
+  
+    for(row in 1:nrow(df)){
+      
+      i <- df[row, ]
+       
+       count <- 0
+       
+       for(number in i){
+         if(number == 0){
+           count <- count + 1
+           }
+       }
+       if(count > MaxNumCero){
+         v <- append(v, row)
+         }
+    }
+  df <- df[-v,]
+  return(df)
+   }
+
+FilteredCounts <- CeroFiles(SelectCounts, 14)
+
+# Generamos un set de datos adicional con la información de a que grupo pertenece cada una de las muestras
+
+SampleInfo <- data.frame(colnames(FilteredCounts), c(rep('COV', 10), rep('HEA', 10)))
+
+colnames(SampleInfo) <- c('ShortName', 'Status')
+
+SampleInfo$Status <- factor (SampleInfo$Status)
+
+SampleInfo
+
+# Normalizamos los datos utilizando la función TMM
+
+DGECounts <- DGEList(FilteredCounts)
+
+DGECounts$samples
+
+DGECounts_Norm <- calcNormFactors(DGECounts)
+
+DGECounts_Log <- cpm(DGECounts_Norm, log=TRUE)
+
+# Boxplot de la media normalizada de los distintos grupos
+
+col.status <- c("blue","green")[SampleInfo$Status]
+
+boxplot(DGECounts_Log, ylab="Log2-CPM",las=2, xlab="", cex.axis=0.8, col = col.status, main="Boxplot de los logCPM (datos normalizados)")
+
+abline(h=median(DGECounts_Log), col="blue")
+
+# Cálculo de las distancias entre muestras
+
+sampleDists <- dist(t(DGECounts_Log))
+
+# Dendograma de las distancias entre muestras
+
+hc <- hclust(sampleDists)
+
+dend <-as.dendrogram(hc)
+
+dend <- dend %>%
+  color_branches(k = 2) %>%
+  set("branches_lwd", c(2,2)) %>%
+  set("branches_lty", c(1,1))
+
+dend <- color_labels(dend, k = 2)
+
+plot(dend)
+
+# Distancias entre muestras graficadas
+
+plotMDS(DGECounts_Log,col=col.status, main="Status", cex=0.7)
+
+# Análisis de expresión diferencial con limma-voom
+
+design  <-  model.matrix(~0+SampleInfo$Status)
+colnames(design) <- c("COV", "HEA")
+rownames(design) <- SampleInfo$ShortName
+design
+
+cont.matrix <- makeContrasts(CovVsHealthy= COV - HEA, levels=design)
+
+cont.matrix
+
+VoomCounts <- voom(DGECounts_Norm, design)
+
+VoomCounts
+
+fit <- lmFit(VoomCounts)
+fit.cont <- contrasts.fit(fit, cont.matrix)
+fit.cont <- eBayes(fit.cont)
+
+toptab_CovVsHEA <- topTable(fit.cont,sort.by="p", number=nrow(fit.cont))
+head(toptab_CovVsHEA)
+
+volcanoplot(fit.cont,highlight=10, main="CovVsHEA")
+
+write.csv(toptab_CovVsHEA, "toptab_CovVsHEA.csv")
+
+summa.fit <- decideTests(fit.cont, p.value = 0.05, lfc = 2)
+summary(summa.fit)
+
+
+topGenes <- rownames(subset(toptab_CovVsHEA, (abs(logFC)> 2) & (adj.P.Val < 0.05)))
+length(topGenes)
+mat  <- DGECounts_Log[topGenes, SampleInfo$ShortName]
+mat  <- mat - rowMeans(mat)
+
+pheatmap(mat)
+
+# Análisis de significación biológica con GOSeq
+
+topTab<- toptab_CovVsHEA
+head(topTab)
+
+allEntrezs <- rownames(topTab)
+selectedEntrezsUP <- rownames(subset(topTab, (logFC> 2) & (adj.P.Val < 0.05)))
+length(allEntrezs); length(selectedEntrezsUP)
+
+allEntrezs
+
+
+ego <- enrichGO(gene = selectedEntrezsUP, 
+                universe = allEntrezs,
+                keyType = "ENSEMBL",
+                OrgDb = org.Hs.eg.db, 
+                ont = "BP", 
+                pAdjustMethod = "BH", 
+                qvalueCutoff = 0.05, 
+                readable = TRUE)
+
+head(ego)
+ego_results <- data.frame(ego)
+write.csv(ego_results, "clusterProfiler_ORAresults_UpGO.csv")
+
+# Visualización de los resultados del análisis de enriquecimiento
+
+dotplot(ego, showCategory=9)
+
+goplot(ego, showCategory=5, cex=0.5)
+
+cnetplot(ego) 
+
+
+ego_sim <- pairwise_termsim(ego)
+emapplot(ego_sim, cex_label_category=0.5)
+```
+
