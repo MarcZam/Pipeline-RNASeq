@@ -2,7 +2,18 @@
 title: 'PEC_2 : Pipeline de Análisis de RNASeq para datos de pacientes con Covid frente a sujetos sanos'
 author: "Marcos Zamora Amengual"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    theme: cosmo
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -11,29 +22,11 @@ knitr::opts_chunk$set(echo = TRUE)
 setwd('D:/Docs/Masteres/Master en Bioinformática y Bioestadística/Tercer Semestre/M0.157 - Análisis de datos ómicos/PEC_02')
 ```
 
---------------
-
-### Índice
-
-1. [Abstract](#abstract)
-2. [Objetivos](#objetivos)
-3. [Materiales y Métodos](#matmet)
-    1. [Datos utilizados en el análisis](#datos)
-    2. [Normalización de los datos](#norm)
-    3. [Visualización de los datos normalizados](#vis)
-    4. [Análisis de Expresión Diferencial](#exp_dif)
-    5. [Análisis de significación biológica](#sigbio)
-4. [Resultados](#resultados)
-5. [Discusión](#discusion)
-6. [Apéndice](#apendice)
-
---------------
-
-###  1. Abstract<a name="abstract"></a>
+#  Abstract<a name="abstract"></a>
 
 <p align="justify">En este estudio se realiza un pipeline de análisis de datos de RNASeq a partir de las tablas de contages de un estudio obtenido del respositorio *Gene Expression Omnibus* en el que se investigaron los cambios en la expresión genética relacionados con la respuesta inmune frente a la infección por SARS-COV-2. Utilizando paquetes de R para el análisis de datos de RNASeq como limma-Voom, edgeR y GOseq, se analizan los genes expresados diferencialmente entre los dos grupos de muestras y se estudian las rutas metabólicas en las que están involucrados dichos genes, para así comprender mejor la respuesta inmune frente a SARS-COV-2</p>
 
-###  2. Objetivos<a name="objetivos"></a>
+# Objetivos<a name="objetivos"></a>
 
 <p align="justify">El objetivo principal de este estudio es el de **Analizar la respuesta inmune frente a la infeciión por SARS-COV-2**</p>
 Para ello:
@@ -42,9 +35,9 @@ Para ello:
 - Analizaremos la expresión diferencial de los genes de los 2 grupos experimentales (sanos e infectados por SARS-COV-2)
 - Anlizaremos las rutas a las que pertenecen estos genes expresados diferencialmente mediante un análisis de enriquecimiento de genes GO
 
-###  3. Matreriales y Métodos<a name="matmet"></a>
+#  Materiales y Métodos<a name="matmet"></a>
 
-#### 3.1. Datos utilizados en el análisis<a name="datos"></a>
+## Datos utilizados en el análisis<a name="datos"></a>
 
 <p align="justify">En este Pipeline se analizan datos de un estudio extraido del repositorio GEO del ncbi, en el que se estudió la influencia de la respuesta inmune frente al SARS-COV-2 en la expresión genética. Este pipeline comienza con los datos del experimento de RNASeq ya alineados con el genema de referencia, ya que partimos de las Tablas de Contages obtenidas tras estos procedimientos. Por ello, el alineamiento de los transcritos no se tiene en cuenta en este análisis</p>
 
@@ -139,7 +132,7 @@ SampleInfo$Status <- factor (SampleInfo$Status)
 knitr::kable(head(FilteredCounts))
 ```
 
-#### 3.2. Normalización de los Datos<a name="norm"></a>
+## Normalización de los Datos<a name="norm"></a>
 
 <p align="justify">Para conseguir que los datos de los distintos tránscritos y muestras sean comparables entre sí, independientemente de la longitud individual de cada tránscrito y el tamaño de las librerias, utilizaremos una normalización TPM de los datos. Esta normalización TPM, normaliza los datos, en primer lugar con respecto a la longitud de los genes y en segundo lugar atendiendo a la profundidad de la secuenciación.<p>
 
@@ -154,7 +147,7 @@ DGECounts <- DGEList(FilteredCounts)
 DGECounts_Norm <- calcNormFactors(DGECounts)
 ```
 
-#### 3.3. Visualización de los datos normalizados<a name="vis"></a>
+## Visualización de los datos normalizados<a name="vis"></a>
 
 <p align="justify">Una vez tenemos los datos ya seleccionados, filtrados y normalizados, podemos visualizarlos para estudiar a gran escala su distribución y ver si son comparables y si esperamos ver alguna diferencia entre los grupos experimentales o si existen otras diferencias en los datos que no se correpondan con estos grupos seleccionados y que se puedan deber a otras causas.<p>
 
@@ -183,7 +176,7 @@ sampleDists <- dist(t(DGECounts_Log))
 plotMDS(DGECounts_Log,col=col.status, main="Distancias entre las Muestras", cex=0.7)
 ```
 
-<p align="justify">Se puede comprobar claramente como la distribución de las muestras se divide en dos grupos, uno a la izquierda del gráfico, compuesto por las muestras correspondientes al grupo COV(pacientes con Covid) y otro grupo a la derecha, con las muestras correspondientes al grupo HEA(sujetos sanos). Esto nos confirma que existen diferencias significativas entre las muestras de los grupos y que por lo tanto es probable que obtengamos resultados que confirme estas diferencias. Podemos graficar este resultado de nuevo pero esta vez utilizando un dendograma que nos muestre como se agrupan nuestras muestras<p>
+<p align="justify">Se puede comprobar claramente como la distribución de las muestras se divide en dos grupos, uno a la izquierda del gráfico, compuesto por las muestras correspondientes al grupo COV(pacientes con Covid) y otro grupo a la derecha, con las muestras correspondientes al grupo HEA(sujetos sanos). Esto nos confirma que existen diferencias significativas entre las muestras de los grupos y que por lo tanto es probable que obtengamos resultados que confirmen estas diferencias. Podemos graficar este resultado de nuevo pero esta vez utilizando un dendograma que nos muestre como se agrupan nuestras muestras<p>
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # Dendograma de las distancias entre muestras
@@ -199,26 +192,29 @@ dend <- dend %>%
   set("branches_lwd", c(2,2)) %>%
   set("branches_lty", c(1,1))
 
-dend <- color_labels(dend, k = 2)
+dend <- color_labels(dend, k = 2, main = "Dendograma de distancias entre muestras")
 
 plot(dend)
 ```
 
-#### 3.4. Análisis de Expresión Diferencial<a name="exp_dif"></a>
+## Análisis de Expresión Diferencial<a name="exp_dif"></a>
+
+<p align="justify">Para realizar el análisis propiamente dicho, vamos a utilizar el paquete limma-Voom para realizar el análisis de los genes expresados diferencialmente. Para ello construiremos una matriz de modelo en el que dividiremos las muestras entre los distintos grupos experimentales para poder analizar las diferencias entre ambos. También realizamos una matriz de contrastes en la que indicaremos las comparaciones que realizaremos entre los distintos grupos experimentales<p>
 
 ```{r}
 design  <-  model.matrix(~0+SampleInfo$Status)
 colnames(design) <- c("COV", "HEA")
 rownames(design) <- SampleInfo$ShortName
-design
 
 cont.matrix <- makeContrasts(CovVsHealthy= COV - HEA, levels=design)
 
 cont.matrix
+```
 
+<p align="justify">Utilizaremos estas matrices para generar la toptable que contendrá los genes expresados diferencialmente entre los dos grupos experimentales que hemos comparado. Para discernir entre los genes expresados diferencialmente y los no expresados diferencialmente, utilizaremos la función *eBayes* que utiliza un algoritmo similar al de naive Bayes para clusterizar los genes expresados diferencialmente de los genes que no están infra o sobreexpresados<p>
+
+```{r}
 VoomCounts <- voom(DGECounts_Norm, design)
-
-VoomCounts
 
 fit <- lmFit(VoomCounts)
 fit.cont <- contrasts.fit(fit, cont.matrix)
@@ -226,36 +222,51 @@ fit.cont <- eBayes(fit.cont)
 
 toptab_CovVsHEA <- topTable(fit.cont,sort.by="p", number=nrow(fit.cont))
 head(toptab_CovVsHEA)
+```
 
-volcanoplot(fit.cont,highlight=10, main="CovVsHEA")
+<p align="justify">Podemos mostrar los tránscritos que presentan una mayor expresión diferencial entre los grupos experimentales utilizando un gráfico del tipo volcán en el que se pueden observar los genes expresados diferencialmente entre los grupos. Vamos a remarcar los 5 genes que presentan una expresión diferencial mayor<p>
 
-write.csv(toptab_CovVsHEA, "toptab_CovVsHEA.csv")
+```{r, echo=FALSE}
+volcanoplot(fit.cont, highlight=5, main="Gráfico de Tránscritos Diferencialmente Expresados")
+```
 
+<p align="justify">También podemos hacernos una idea del número de tránscritos con expresión diferencial si mostramos en una tabla aquellos que estan infraexpresados, sobreexpresados y los tránscritos que no se ven afectados<p>
+
+```{r, echo=FALSE}
 summa.fit <- decideTests(fit.cont, p.value = 0.05, lfc = 2)
 summary(summa.fit)
+```
 
+```{r, echo=FALSE}
 library(pheatmap)
+
 topGenes <- rownames(subset(toptab_CovVsHEA, (abs(logFC)> 2) & (adj.P.Val < 0.05)))
-length(topGenes)
+
 mat  <- DGECounts_Log[topGenes, SampleInfo$ShortName]
 mat  <- mat - rowMeans(mat)
-library(pheatmap)
+
+```
+
+<p align="justify">Estos `r length(topGenes)` transcritos que presentan una expresión diferencial entre los grupos experimentales se pueden observar en un mapa de calor para ver como es esta expresión diferencial y para ver en que grupos aparecen los genes sobreexpresados y en cuales los infraexpresados. Podemos ver en el mapa de calor inferior que la mayoría de los genes sobreexpresados se encuentran en el grupo de pacientes con COVID, lo que nos podría indicar que hay una respuesta inmune frente al patógeno que activa o sobreexpresa algunos genes que no son necesarios si no hay una infección vírica<p>
+
+```{r, echo=FALSE}
 pheatmap(mat)
 ```
 
-#### 3.5. Análisis de significación biológica<a name="sigbio"></a>
+## Análisis de significación biológica<a name="sigbio"></a>
 
-```{r}
+```{r, echo=FALSE}
 topTab<- toptab_CovVsHEA
-head(topTab)
 
 allEntrezs <- rownames(topTab)
 selectedEntrezsUP <- rownames(subset(topTab, (logFC> 2) & (adj.P.Val < 0.05)))
-length(allEntrezs); length(selectedEntrezsUP)
+```
 
-allEntrezs
+<p align="justify">Vamos a seleccionar estos `r length(selectedEntrezsUP)` genes sobreexpresados para analizar de que rutas biológicas forman parte y poder estudiar la significación biológica de esta sobreexpresión y comprobar si se debe a una respuesta inmune estimulada por la infección provocada por el SARS-COV-2. Para ello vamos a realizar un análisis de significación biológica utilizando la base de datos GO en la que podemos encontrar los transcritos sobreeexpresados y sus anotaciones correspondientes a las rutas metabólicas de las que forman parte.<p>
 
+```{r, message=FALSE, warning=FALSE}
 library(clusterProfiler)
+library(org.Hs.eg.db)
 ego <- enrichGO(gene = selectedEntrezsUP, 
                 universe = allEntrezs,
                 keyType = "ENSEMBL",
@@ -265,12 +276,28 @@ ego <- enrichGO(gene = selectedEntrezsUP,
                 qvalueCutoff = 0.05, 
                 readable = TRUE)
 
-head(ego)
-ego_results <- data.frame(ego)
-write.csv(ego_results, "clusterProfiler_ORAresults_UpGO.csv")
 ```
 
-#### 6. Apéndice<a name="apendice"></a>
+# Resultados<a name="resultados"></a>
+
+<p align="justify">Obtenemos como resultado un listado de todos los genes que se encuentran sobreexpresados en los pacientes con SARS-COV-2 frente a los sujetos sanos, unidos estos a las categorías GO de cada uno de ellos. Gracias a esto podemos analizar que categorías se ven más sobreexpresados y podemos etudiar a que se deben estas sobreexpresiones.<p>
+
+<p align="justify">Podemos mostrar estos resultados que hemos obtenido de varias maneras, utilizando distintos gráficos para mostrar las rutas metabólicas sobreexpresadas. En el gráfico inferior por ejemplo podemos observar las 8 rutas metabólicas que presentan una mayor sobreexpresión dentro del grupo de pacientes infectados. Podemos observar que la mayoría de las rutas estan relacionados con procesos metabólicos de defensa como pueden ser la producción de inmunoglobinas o la fagocitosis<p>
+
+```{r, echo=FALSE}
+## Visualización de los resultados del análisis de enriquecimiento
+
+dotplot(ego, showCategory=8)
+
+```
+
+# Discusión<a name="discusion"></a>
+
+<p align="justify">En este análisis hemos podido realizar todos los pasos de un ánalisis bioinformático de RNASeq, desde el preprocesado y la normalización de los datos a partir de tablas de contages hasta el ánalisis de expresión diferencial y de significación biológica de los resultados finales. Esto nos ha permitido ver a gran escala como se llevan a cabo este tipo de análisis y que paquetes existen para llevarlos a cabo<p>
+
+<p align="justify">Aunque en general, este estudio nos ha permito comprender el proceso de anáisis de RNASeq a gran escala, el no conocer el estudio de partido, y el no haber llevado a cabo el alineamiento con el genoma de referencia para obtener la tabla de contages por nuestra cuenta son los dos puntos principales en los que considero que hemos tenido una mayor limitación y nos han permitido ser menos flexibles con nuestros análisi finales</p>
+
+# Apéndice<a name="apendice"></a>
 
 ```{r, eval = FALSE}
 # Pipeline de Análisis de Datos de RNASeq
